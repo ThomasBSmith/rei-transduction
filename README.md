@@ -1,4 +1,4 @@
-This repo contains code for doing symbolic physics stuff.
+This repo contains code for the theory of microwave-optical transduction with rare-earth ions.
 
 To set up this repo, type the following into the terminal:
 
