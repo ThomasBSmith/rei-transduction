@@ -1,4 +1,6 @@
-"""Microwave-optical entanglement: output covariance and logarithmic negativity."""
+"""
+Tools to compute output covariance and logarithmic negativity.
+"""
 
 import numpy as np
 from scipy.integrate import quad_vec

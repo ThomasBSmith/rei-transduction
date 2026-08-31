@@ -1,4 +1,6 @@
-"""Input-output machinery for the microwave-optical transducer."""
+"""
+Input-output machinery for the microwave-optical transducer.
+"""
 
 from dataclasses import dataclass
 

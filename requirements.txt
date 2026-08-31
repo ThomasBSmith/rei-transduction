@@ -6,3 +6,4 @@ notebook>=7.2
 ipykernel>=6.29
 qutip
 thewalrus
+joblib
