@@ -1,5 +1,6 @@
 """
-Tools to compute the GKP average gate fidelity through the transduction channel (App. F2).
+Analytic (closed-form) GKP average gate fidelity through the transduction
+channel (App. F2; Shaw et al., arXiv:2210.14919).
 """
 
 import numpy as np
@@ -8,8 +9,9 @@ from scipy.special import erfc
 
 def gkp_envelope(nbar):
     """
-    Gaussian-envelope parameter Δ of a finite-energy square-lattice GKP state
-    with mean photon number nbar, Δ = 1/sqrt(2 nbar + 1).
+    Gaussian-envelope parameter of a finite-energy square-lattice GKP state,
+
+        Delta = 1/sqrt(2 nbar + 1).
 
     Arguments
     ---------
@@ -21,10 +23,10 @@ def gkp_envelope(nbar):
 
 def gkp_channel_params(kappa_a, kappa_b, omega_b, z, eta_a, eta_b):
     """
-    Impedance-matched GKP channel parameters at the central frequency (App. F.2):
-    the idealised efficiency eta, the efficiency correction delta, and the
-    phase-sensitive Gaussian noise variances sigma_G±^2. Loss rates enter as
-    ratios to omega_b.
+    Impedance-matched GKP channel parameters at the central frequency (App. F2):
+    the idealised efficiency eta, the finite-squeezing correction delta, and the
+    phase-sensitive Gaussian noise variances sigma_G+^2, sigma_G-^2. Loss rates
+    enter as ratios to omega_b.
 
     Arguments
     ---------
@@ -35,12 +37,12 @@ def gkp_channel_params(kappa_a, kappa_b, omega_b, z, eta_a, eta_b):
     z : float
         Parasitic asymmetry |g_bp/g_bs|.
     eta_a, eta_b : float
-        External coupling fractions kappa^ext/kappa.
+        External coupling fractions kappa^ext / kappa.
     """
     ka, kb = kappa_a/omega_b, kappa_b/omega_b
     ka_ext = eta_a * ka
 
-    eta   = eta_a * eta_b 
+    eta   = eta_a * eta_b
     delta = z**2 * kb**2 / 16
     base  = z**2/32 * (2*ka_ext**2 + eta*kb**2)
     cross = (z*ka_ext/4) * (ka_ext/ka - 1)
@@ -49,9 +51,9 @@ def gkp_channel_params(kappa_a, kappa_b, omega_b, z, eta_a, eta_b):
 
 def gkp_infidelity(nbar, eta, delta, sigmaG_sq_p, sigmaG_sq_m):
     """
-    Average gate infidelity 1 - F̄ of a square-lattice GKP state transduced
-    through the channel (App. F.2; Shaw et al. logical-error formula), summing
-    the squeezed and anti-squeezed quadrature contributions.
+    Average gate infidelity 1 - Fbar of a square-lattice GKP state transduced
+    through the channel (App. F2; Shaw et al. logical-error formula). Sums the
+    squeezed and anti-squeezed quadrature contributions.
 
     Arguments
     ---------
@@ -60,7 +62,7 @@ def gkp_infidelity(nbar, eta, delta, sigmaG_sq_p, sigmaG_sq_m):
     eta : float
         Idealised transduction efficiency.
     delta : float
-        Efficiency correction from finite squeezing.
+        Finite-squeezing correction to the efficiency.
     sigmaG_sq_p, sigmaG_sq_m : float
         Gaussian noise variances sigma_G+^2, sigma_G-^2.
     """

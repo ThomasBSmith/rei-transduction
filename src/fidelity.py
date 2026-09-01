@@ -1,21 +1,25 @@
 """
-Tools for calculating state fidelities in phase-space using characteristic functions (App. F1).
+State fidelities in phase space via characteristic functions (App. F1).
 """
 
 import numpy as np
 from scipy.special import eval_laguerre
 
-from .gkp import gkp_envelope
+from .gkp_analytics import gkp_envelope
 
 
 def Phi_fock(z, n):
     """
-    Characteristic function of the number state |n>.
+    Characteristic function of the number state |n>,
+
+        Phi(z) = e^{-|z|^2/2} L_n(|z|^2),
+
+    with L_n the n-th Laguerre polynomial.
 
     Arguments
     ---------
-    z : complex
-        Complex argument of the characteristic function.
+    z : complex or ndarray
+        Argument of the characteristic function.
     n : int
         Fock state number.
     """
@@ -24,12 +28,14 @@ def Phi_fock(z, n):
 
 def Phi_coherent(z, alpha):
     """
-    Characteristic function of the coherent state |alpha>.
+    Characteristic function of the coherent state |alpha>,
+
+        Phi(z) = e^{-|z|^2/2} e^{z alpha* - z* alpha}.
 
     Arguments
     ---------
-    z : complex
-        Complex argument of the characteristic function.
+    z : complex or ndarray
+        Argument of the characteristic function.
     alpha : complex
         Coherent state amplitude.
     """
@@ -38,40 +44,32 @@ def Phi_coherent(z, alpha):
 
 def Phi_gkp(z, nbar, mu=0, tol=1e-6):
     """
-    Characteristic function of the finite-energy square-lattice GKP logical
-    state |mu_gkps>, from Albert et al. (arXiv:1708.05010v3) Eq. (D11) with
-    delta_mu = 0 (diagonal, mu = nu):
+    Characteristic function of the finite-energy square-lattice GKP state
+    |mu_gkp>, from Albert et al. (arXiv:1708.05010v3) Eq. (D11) with mu = nu:
 
-        Φ_gkp(z) = (1/𝒩) Σ_{n1,n2} (-1)^{(n1+mu) n2}
-                   exp(-|z - Λ|² / 2Δ²) exp(-Δ² |z + Λ|² / 8),
+        Phi(z) = (1/N) Sum_{n1,n2} (-1)^{(n1 + mu) n2}
+                 exp(-|z - L|^2 / 2 Delta^2) exp(-Delta^2 |z + L|^2 / 8),
 
-    with lattice points Λ = sqrt(π/2) (2 n1 + i n2), envelope
-    Δ = 1/sqrt(2 nbar + 1) (gkp_envelope), and normalisation 𝒩 = Φ_gkp(0)
-    enforcing Tr ρ = 1. Same displacement convention D(z) = exp(z a† - z* a)
-    as Phi_fock / Phi_coherent, so this plugs straight into fidelity().
-
-    The lattice sum is real and even in z. Each term's amplitude is bounded by
-    the energy envelope at its own peak, exp(-Δ² |Λ|² / 2), so the sum is
-    truncated at |Λ|_max = sqrt(2 ln(1/tol)) / Δ (grid-independent). Note the
-    envelope decays only as exp(-Δ² |z|² / 8), so fidelity() needs a wider
-    window than the Fock/coherent default, e.g. R = 14 for nbar up to ~5.
+    lattice L = sqrt(pi/2) (2 n1 + i n2), envelope Delta = 1/sqrt(2 nbar + 1)
+    (gkp_envelope), normalisation N = Phi(0). Same displacement convention
+    D(z) = exp(z a† - z* a) as Phi_fock / Phi_coherent. Real and even in z.
 
     Arguments
     ---------
     z : complex or ndarray
-        Complex argument of the characteristic function.
+        Argument of the characteristic function.
     nbar : float
-        Mean photon number of the GKP state (sets the envelope Δ).
+        Mean photon number, sets the envelope Delta.
     mu : int
         Logical Z-basis state, 0 or 1.
     tol : float
-        Smallest lattice-term amplitude retained in the sum.
+        Smallest lattice-term amplitude kept in the sum.
     """
     Delta = gkp_envelope(nbar)
     z = np.asarray(z, dtype=complex)
-    a = np.sqrt(np.pi / 2)   # Λ = a (2 n1 + i n2)
+    a = np.sqrt(np.pi / 2)   # L = a (2 n1 + i n2)
 
-    # Truncate where the term amplitude exp(-Δ²|Λ|²/2) drops below tol.
+    # Truncate where the term amplitude exp(-Delta^2 |L|^2 / 2) drops below tol.
     Lam_max = np.sqrt(2 * np.log(1/tol)) / Delta
     n1_max = int(np.ceil(Lam_max / (2*a)))
     n2_max = int(np.ceil(Lam_max / a))
@@ -94,33 +92,30 @@ def Phi_gkp(z, nbar, mu=0, tol=1e-6):
 
 def integration_grid(kind, param, tol=1e-6, pts_per_feature=8):
     """
-    Integration grid (R, N) for fidelity(), sized to the characteristic
-    function Phi_<kind> of the target state so the (R, N) defaults need not be
-    hand-tuned per state.
+    Integration grid (R, N) for fidelity(), sized to the target characteristic
+    function so the defaults need not be hand-tuned per state.
 
-    R is the half-width at which |Phi_in| has fallen to tol; the spacing h puts
-    pts_per_feature samples across the fastest feature of Phi_in, floored at 0.5
-    to always resolve the O(1)-width Gaussian envelope. All three scalings were
-    checked against a >=10x finer reference grid (see below).
+    R is the half-width where |Phi_in| has decayed to tol. The spacing puts
+    pts_per_feature points across the fastest oscillation of Phi_in, floored so
+    the O(1)-width Gaussian envelope is always resolved.
 
+        coherent : envelope width 1; phase winds with wavelength pi/sqrt(nbar).
+        fock     : e^{-s/2} s^n (s = |z|^2) peaks at s = 2n; L_n zeros spaced
+                   pi/sqrt(n) near the origin.
+        gkp      : comb envelope exp(-Delta^2 |z|^2 / 8), peak width Delta;
+                   1 - F is a small residual after +/- peak cancellation, so the
+                   spacing over-resolves (~Delta/4). Cost ~ N^2 ~ nbar^2.
+
+    Arguments
+    ---------
     kind : {'coherent', 'fock', 'gkp'}
+        Target state.
     param : float or int
-        Mean photon number n̄ for 'coherent' and 'gkp'; Fock number n for 'fock'.
-
-    coherent : Phi = e^{-|z|²/2} e^{2i Im(z α*)}, α = sqrt(n̄).
-        Gaussian envelope of width 1, R = sqrt(2 ln 1/tol) + 1; the phase winds
-        with wavelength π / sqrt(n̄). Exact to 5 sig figs for n̄ <= 15.
-    fock : Phi = e^{-|z|²/2} L_n(|z|²).
-        e^{-s/2} s^n / n! (s = |z|²) peaks at s = 2n with width ~2 sqrt(n), so
-        R = sqrt(2n + 8 sqrt(n+1) + 2 ln 1/tol) + 1. The zeros of L_n(|z|²) have
-        density (1/π) sqrt(4n - |z|²) in |z|, densest at the origin, so the
-        tightest zero-pair wavelength is π / sqrt(n). Exact for n <= 15.
-    gkp : Phi is the alternating-sign lattice comb of Phi_gkp, envelope
-        exp(-Δ²|z|²/8), Δ = 1/sqrt(2 n̄ + 1).
-        R = sqrt(2 ln 1/tol) / Δ + 3Δ. The spacing must be ~Δ/4, well below the
-        comb peak width Δ: 1 - F is a small residual left after near-total
-        cancellation between +/- peaks, so the peaks need over-resolving.
-        Verified to 5 sig figs for n̄ <= 5. Cost ~ N² ~ 1/Δ⁴ ~ n̄² -- low n̄ only.
+        Mean photon number nbar ('coherent', 'gkp') or Fock number n ('fock').
+    tol : float
+        Target decay of |Phi_in| at the grid edge.
+    pts_per_feature : int
+        Samples across the fastest oscillation.
     """
     ln = np.log(1/tol)
 
@@ -144,22 +139,20 @@ def integration_grid(kind, param, tol=1e-6, pts_per_feature=8):
 
 def noise_factor(z, expect_NdN, expect_NN, comm_NNd):
     """
-    Gaussian added-noise factor of the transduced characteristic function,
+    Gaussian added-noise factor the channel applies to Phi_in (App. F1),
 
-        exp{ ½[ z² <N†²> + z*² <N²> - |z|²(2<N†N> + [N,N†]) ] },
+        exp{ (1/2) [ z^2 <N†^2> + z*^2 <N^2> - |z|^2 (2 <N†N> + [N,N†]) ] },
 
-    from the moments of the added-noise operator N (aout_moments). This is the
-    multiplicative penalty the channel applies to Φ_in, on top of the signal
-    rescaling z -> S_12* z - S_14 z*. Even in z.
+    from the added-noise moments of aout_moments. Even in z.
 
     Arguments
     ---------
     z : complex or ndarray
-        Complex argument of the characteristic function.
+        Argument of the characteristic function.
     expect_NdN, expect_NN : complex
-        Noise moments <N† N> and <N²> of the added-noise operator N.
+        Noise moments <N†N> and <N^2>.
     comm_NNd : float
-        Noise commutator [N, N†] = 1 - |S_12|² + |S_14|².
+        Noise commutator [N, N†] = 1 - |S_12|^2 + |S_14|^2.
     """
     return np.exp(0.5*(
         z**2 * np.conj(expect_NN)
@@ -170,26 +163,24 @@ def noise_factor(z, expect_NdN, expect_NN, comm_NNd):
 
 def Phi_out(z, Phi_in, S_12, S_14, expect_NdN, expect_NN, comm_NNd):
     """
-    Output (transduced) characteristic function (App. F1, Eq. app-eqn:Phi-out-final),
+    Transduced characteristic function (App. F1, Eq. app-eqn:Phi-out-final),
 
-        Φ_out(z) = Φ_in(S_12* z - S_14 z*) · noise_factor(z),
+        Phi_out(z) = Phi_in(S_12* z - S_14 z*) * noise_factor(z).
 
-    for an input state with characteristic function Phi_in sent through the
-    channel described by (S_12, S_14, <N†N>, <N²>, [N,N†]) from aout_moments.
-    The fidelity integrand is Φ_in(z) Φ_out(-z).
+    The channel is (S_12, S_14, <N†N>, <N^2>, [N,N†]) from aout_moments.
 
     Arguments
     ---------
     z : complex or ndarray
-        Complex argument of the characteristic function.
+        Argument of the characteristic function.
     Phi_in : callable
-        Input characteristic function, a function of the complex argument z.
+        Input characteristic function.
     S_12, S_14 : complex
         Transduction and two-mode-squeezing amplitudes (first row of S).
     expect_NdN, expect_NN : complex
-        Noise moments <N† N> and <N²> of the added-noise operator N.
+        Noise moments <N†N> and <N^2>.
     comm_NNd : float
-        Noise commutator [N, N†] = 1 - |S_12|² + |S_14|².
+        Noise commutator [N, N†].
     """
     z_tilde = np.conj(S_12)*z - S_14*np.conj(z)
     return Phi_in(z_tilde) * noise_factor(z, expect_NdN, expect_NN, comm_NNd)
@@ -197,24 +188,26 @@ def Phi_out(z, Phi_in, S_12, S_14, expect_NdN, expect_NN, comm_NNd):
 
 def fidelity(Phi_in, S_12, S_14, expect_NdN, expect_NN, comm_NNd, R=10.0, N=501):
     """
-    Transduction fidelity F = (1/π) ∫ d²z Φ_in(z) Φ_out(-z) (App. F1,
-    Eq. app-eqn:fidelity), evaluated on a square grid in the complex plane,
-    with Φ_out built by Phi_out().
+    Transduction fidelity (App. F1, Eq. app-eqn:fidelity),
+
+        F = (1/pi) integral d^2z  Phi_in(z) Phi_out(-z),
+
+    on a square grid of half-width R with N points per axis (integration_grid).
 
     Arguments
     ---------
     Phi_in : callable
-        Target characteristic function, a function of the complex argument z.
+        Target characteristic function.
     S_12, S_14 : complex
-        Transduction and two-mode-squeezing amplitudes (first row of the scattering matrix).
+        Transduction and two-mode-squeezing amplitudes (first row of S).
     expect_NdN, expect_NN : complex
-        Noise moments <N† N> and <N²> of the added-noise operator N.
+        Noise moments <N†N> and <N^2>.
     comm_NNd : float
-        Noise commutator [N, N†] = 1 - |S_12|² + |S_14|².
+        Noise commutator [N, N†].
     R : float
-        Half-width of the (square) integration grid.
+        Half-width of the integration grid.
     N : int
-        Number of grid points per axis.
+        Grid points per axis.
     """
 
     # Integration grid in the complex plane.

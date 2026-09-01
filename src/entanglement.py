@@ -37,7 +37,11 @@ def filter_matrix(omega, omega_b, tau):
     tau : float
         Temporal mode width.
     """
+
+    # Gaussian filter function.
     f = lambda x: (tau**2/np.pi)**0.25 * np.exp(-(tau*x)**2/2)
+
+    # Diagonal filter matrix (+,-,-,+) comes from definition of Fourier transform. 
     return np.diag([
         f(omega + omega_b),
         f(omega - omega_b),
@@ -82,18 +86,28 @@ def covariance(transducer, g_t, g_s, tau):
     tau : float
         Temporal mode width.
     """
+
+    # Extract microwave cavity frequency.
     omega_b = transducer.omega_b
+
+    # Compose integrand.
     integrand = lambda omega: (
         M @ filter_matrix(omega, omega_b, tau)
         @ spectral_covariance(transducer, omega, g_t, g_s)
         @ filter_matrix(omega, omega_b, tau) @ M.conj().T
         ).real
 
+    # Set the integration edge at many multiples of tau.
     edge = 20/tau
+
+    # Check that integration regions don't overlap.
     assert edge < omega_b, "Sideband integration windows overlap."
 
+    # Integrate the two sidebands.
     V_neg, _ = quad_vec(integrand, -omega_b - edge, -omega_b + edge, limit=200)
     V_pos, _ = quad_vec(integrand,  omega_b - edge,  omega_b + edge, limit=200)
+
+    # Return the computed covariance.
     return V_neg + V_pos
 
 
