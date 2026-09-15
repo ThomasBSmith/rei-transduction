@@ -22,6 +22,18 @@ OMEGA = np.block([
     [-np.eye(2), np.zeros((2, 2))]
     ])
 
+def filter_func(omega, tau):
+    """
+    Gaussian temporal-mode filter function f(omega) of width tau.
+
+    Arguments
+    ---------
+    omega : float
+        Frequency at which to evaluate the filter.
+    tau : float
+        Temporal mode width.
+    """
+    return (tau**2/np.pi)**0.25 * np.exp(-(tau*omega)**2/2)
 
 def filter_matrix(omega, omega_b, tau):
     """
@@ -39,7 +51,7 @@ def filter_matrix(omega, omega_b, tau):
     """
 
     # Gaussian filter function.
-    f = lambda x: (tau**2/np.pi)**0.25 * np.exp(-(tau*x)**2/2)
+    f = lambda x: filter_func(x, tau)
 
     # Diagonal filter matrix (+,-,-,+) comes from definition of Fourier transform. 
     return np.diag([
